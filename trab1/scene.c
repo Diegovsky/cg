@@ -22,9 +22,15 @@ typedef struct {
 v3 getv3(lua_State *L) {
   v3 v;
   if (lua_istable(L, -1)) {
-    lua_geti(L, -1, 1);
-    lua_geti(L, -2, 2);
-    lua_geti(L, -3, 3);
+    if (luaL_len(L, -1) == 3) {
+      lua_geti(L, -1, 1);
+      lua_geti(L, -2, 2);
+      lua_geti(L, -3, 3);
+    } else {
+      lua_getfield(L, -1, "x");
+      lua_getfield(L, -2, "y");
+      lua_getfield(L, -3, "z");
+    }
   }
   v.a = luaL_checknumber(L, -3);
   v.b = luaL_checknumber(L, -2);
@@ -54,7 +60,7 @@ int l_vertex(lua_State *L) {
 }
 
 void reload_script() {
-  if(luaL_dofile(L, LUA_FILE)) {
+  if (luaL_dofile(L, LUA_FILE)) {
     puts("File has syntax errors");
     on_error(L);
     return;

@@ -1,0 +1,12 @@
+{
+  "diagnostics": {
+    "disable": [
+      "lowercase-global"
+    ]
+  },
+  "workspace": {
+    "library": [
+      "pog.d.lua"
+    ]
+  }
+}

@@ -1,9 +1,8 @@
-
 local v = vertex
 
 function square(x, y, size)
   halfside = size/2
-  
+
   v(x + halfside, y + halfside, -1)
   v(x + halfside, y - halfside, -1)
   v(x - halfside, y - halfside, -1)
