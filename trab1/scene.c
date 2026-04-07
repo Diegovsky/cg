@@ -1,4 +1,6 @@
 #include "scene.h"
+#define DMON_IMPL
+#include "dmon.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
@@ -6,8 +8,11 @@
 #include <lua.h>
 #include <lualib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "scripting.h"
 
 const char *LUA_FILE = "gl.lua";
 
@@ -15,47 +20,12 @@ lua_State *L = NULL;
 bool errored = false;
 struct timespec last_edit;
 
-typedef struct {
-  double a, b, c;
-} v3;
-
-v3 getv3(lua_State *L) {
-  v3 v;
-  if (lua_istable(L, -1)) {
-    if (luaL_len(L, -1) == 3) {
-      lua_geti(L, -1, 1);
-      lua_geti(L, -2, 2);
-      lua_geti(L, -3, 3);
-    } else {
-      lua_getfield(L, -1, "x");
-      lua_getfield(L, -2, "y");
-      lua_getfield(L, -3, "z");
-    }
-  }
-  v.a = luaL_checknumber(L, -3);
-  v.b = luaL_checknumber(L, -2);
-  v.c = luaL_checknumber(L, -1);
-  return v;
-}
-
 static int on_error(lua_State *L) {
   errored = true;
   printf("Error");
   const char *text = lua_tostring(L, -1);
   printf(": '%s'", text);
   puts("");
-  return 0;
-}
-
-int l_color(lua_State *L) {
-  v3 color = getv3(L);
-  glColor3f(color.a, color.b, color.c);
-  return 0;
-}
-
-int l_vertex(lua_State *L) {
-  v3 vertex = getv3(L);
-  glVertex3f(vertex.a, vertex.b, vertex.c);
   return 0;
 }
 
@@ -75,17 +45,30 @@ void reload_script() {
   errored = false;
 }
 
+void on_file_change(dmon_watch_id watch_id, dmon_action action,
+                    const char *rootdir, const char *filepath,
+                    const char *oldfilepath, void *user) {
+  if (strstr(filepath, ".lua") != NULL && (action & (DMON_ACTION_MODIFY | DMON_ACTION_CREATE)) != 0) {
+    int top = lua_gettop(L);
+    lua_pushglobaltable(L);
+    lua_getfield(L, -1, "package");
+    lua_createtable(L, 0, 0);
+    lua_setfield(L, -1, "loaded");
+    lua_settop(L, top);
+    reload_script();
+  }
+}
+
 __attribute__((constructor)) static void init() {
   L = luaL_newstate();
   luaopen_string(L);
   luaL_openlibs(L);
 
-  lua_pushcfunction(L, l_color);
-  lua_setglobal(L, "color");
-
-  lua_pushcfunction(L, l_vertex);
-  lua_setglobal(L, "vertex");
+  register_globals(L);
   lua_atpanic(L, on_error);
+
+  dmon_init();
+  dmon_watch("./", on_file_change, DMON_WATCHFLAGS_RECURSIVE, NULL);
 
   reload_script();
 }
@@ -98,15 +81,15 @@ static bool more_recent(struct timespec a, struct timespec b) {
 }
 
 void scene_idle() {
-  struct stat buf;
-  if (stat(LUA_FILE, &buf) == 0) {
-    struct timespec now = buf.st_mtim;
-    if (more_recent(now, last_edit)) {
-      printf("Change detected, reloading file.\n");
-      reload_script();
-      last_edit = now;
-    }
-  }
+  // struct stat buf;
+  // if (stat(LUA_FILE, &buf) == 0) {
+  //   struct timespec now = buf.st_mtim;
+  //   if (more_recent(now, last_edit)) {
+  //     printf("Change detected, reloading file.\n");
+  //     reload_script();
+  //     last_edit = now;
+  //   }
+  // }
   scene_draw();
 }
 
@@ -116,18 +99,12 @@ void scene_draw() {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
-  glBegin(GL_QUADS);
   if (!errored) {
     lua_getglobal(L, "draw");
     if (lua_pcall(L, 0, 0, 0)) {
       on_error(L);
     }
   }
-  // glVertex3f(-0.5f, -0.5f, -5.0f);
-  // glVertex3f(0.5f, -0.5f, -5.0f);
-  // glVertex3f(0.5f, 0.5f, -5.0f);
-  // glVertex3f(-0.5f, 0.5f, -5.0f);
-  glEnd();
 
   glutSwapBuffers();
 }

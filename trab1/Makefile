@@ -7,7 +7,9 @@ LDFLAGS = -lGL -lGLU -lglut -llua
 TARGET = lesson1
 SRC = lesson1.c
 
-lesson1: lesson1.o scene.o
+lesson1: lesson1.o scene.o scripting.o
+
+scene.o: scripting.h
 
 lesson1.o: scene.h
 
